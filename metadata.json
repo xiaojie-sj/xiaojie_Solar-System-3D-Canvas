@@ -1,0 +1,6 @@
+{
+  "name": "Solaris 3D - 太阳系三维拟物漫游",
+  "description": "基于 Three.js 与程序化 Canvas 纹理拟物化渲染的 3D 太阳系漫游系统，拥有逼真太阳日冕与光晕、行星自转与公转轨道轨迹、大气层辉光特效与全交互视角控制。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
