@@ -4,7 +4,11 @@ import { CelestialDock } from './components/CelestialDock';
 import { PlanetInfoCard } from './components/PlanetInfoCard';
 import { HeaderBar } from './components/HeaderBar';
 import { HoverTooltip } from './components/HoverTooltip';
+import { HandGestureHUD } from './components/HandGestureHUD';
+import { HolographicPointer } from './components/HolographicPointer';
+import { CameraPermissionPrompt } from './components/CameraPermissionPrompt';
 import { SolarEngine } from './services/SolarEngine';
+import { GestureState } from './services/HandTracker';
 import { PlanetConfig } from './types';
 import { ALL_CELESTIAL_BODIES } from './data/planets';
 
@@ -21,6 +25,31 @@ export default function App() {
   const [showAtmospheres, setShowAtmospheres] = useState<boolean>(true);
   const [showAsteroidBelt, setShowAsteroidBelt] = useState<boolean>(true);
   const [realisticScale, setRealisticScale] = useState<boolean>(false);
+
+  // MediaPipe Hand Gesture Tracking State
+  const [isHandTrackingActive, setIsHandTrackingActive] = useState<boolean>(false);
+  const [showCameraPrompt, setShowCameraPrompt] = useState<boolean>(true);
+  const [gestureState, setGestureState] = useState<GestureState | null>(null);
+  const [targetLockPlanetName, setTargetLockPlanetName] = useState<string | null>(null);
+
+  // Directly trigger browser camera permission prompt on user gesture
+  const handleActivateCamera = async () => {
+    setShowCameraPrompt(false);
+    setIsHandTrackingActive(true);
+    try {
+      await navigator.mediaDevices.getUserMedia({ video: true });
+    } catch (e) {
+      console.log('Browser camera permission prompt result:', e);
+    }
+  };
+
+  const handleToggleHandTracking = () => {
+    if (!isHandTrackingActive) {
+      handleActivateCamera();
+    } else {
+      setIsHandTrackingActive(false);
+    }
+  };
 
   // Handle celestial selection
   const handleSelectPlanet = useCallback((id: string | null) => {
@@ -98,16 +127,40 @@ export default function App() {
     handleSelectPlanet(null);
   };
 
-  // Next Planet button inside info card
-  const handleSelectNext = () => {
-    if (!selectedPlanet) {
-      handleSelectPlanet('sun');
-      return;
-    }
-    const curIndex = ALL_CELESTIAL_BODIES.findIndex(b => b.id === selectedPlanet.id);
-    const nextIndex = (curIndex + 1) % ALL_CELESTIAL_BODIES.length;
-    handleSelectPlanet(ALL_CELESTIAL_BODIES[nextIndex].id);
-  };
+  // Next Planet button inside info card & gesture cycle
+  const handleSelectNext = useCallback(() => {
+    setSelectedPlanet((prev) => {
+      if (!prev) {
+        handleSelectPlanet(ALL_CELESTIAL_BODIES[0].id);
+        return ALL_CELESTIAL_BODIES[0];
+      }
+      const curIndex = ALL_CELESTIAL_BODIES.findIndex((b) => b.id === prev.id);
+      const nextIndex = (curIndex + 1) % ALL_CELESTIAL_BODIES.length;
+      handleSelectPlanet(ALL_CELESTIAL_BODIES[nextIndex].id);
+      return ALL_CELESTIAL_BODIES[nextIndex];
+    });
+  }, [handleSelectPlanet]);
+
+  // Handle gesture events from HandTracker
+  const handleGestureReceived = useCallback(
+    (gesture: GestureState) => {
+      setGestureState(gesture);
+
+      if (engineRef.current) {
+        const lockedName = engineRef.current.handleHandGesture(
+          gesture,
+          () => {
+            handleSelectNext();
+          },
+          (paused) => {
+            setIsPaused(paused);
+          }
+        );
+        setTargetLockPlanetName(lockedName);
+      }
+    },
+    [handleSelectNext]
+  );
 
   // Keyboard shortcut support (Space: pause, Esc: overview, 0-8: celestial jump)
   useEffect(() => {
@@ -122,7 +175,7 @@ export default function App() {
       } else if (e.key === '0') {
         handleSelectPlanet('sun');
       } else if (e.key >= '1' && e.key <= '8') {
-        const planetIndex = parseInt(e.key, 10); // 1 = mercury, 2 = venus, etc.
+        const planetIndex = parseInt(e.key, 10);
         if (planetIndex < ALL_CELESTIAL_BODIES.length) {
           handleSelectPlanet(ALL_CELESTIAL_BODIES[planetIndex].id);
         }
@@ -142,20 +195,45 @@ export default function App() {
         onHoverPlanet={handleHoverPlanetFromEngine}
       />
 
-      {/* 2. Top Header HUD */}
-      <HeaderBar onResetView={handleResetView} />
+      {/* 2. Top Header HUD with Hand Gesture Toggle */}
+      <HeaderBar
+        onResetView={handleResetView}
+        isHandTrackingActive={isHandTrackingActive}
+        onToggleHandTracking={handleToggleHandTracking}
+      />
 
-      {/* 3. Hover Tooltip */}
+      {/* 3. Browser Camera Permission Activation Banner */}
+      <CameraPermissionPrompt
+        isOpen={showCameraPrompt}
+        onConfirm={handleActivateCamera}
+        onDismiss={() => setShowCameraPrompt(false)}
+      />
+
+      {/* 4. MediaPipe Hand Gesture Monitor & Camera HUD */}
+      <HandGestureHUD
+        isActive={isHandTrackingActive}
+        onToggleActive={() => setIsHandTrackingActive(false)}
+        onGesture={handleGestureReceived}
+        gestureState={gestureState}
+      />
+
+      {/* 5. Holographic Pointer Reticle (Tracks index finger) */}
+      <HolographicPointer
+        gestureState={gestureState}
+        targetPlanetName={targetLockPlanetName}
+      />
+
+      {/* 6. Hover Tooltip */}
       <HoverTooltip planet={hoveredPlanet} pos={hoverPos} />
 
-      {/* 4. Selected Planet Astronomical Spec Card */}
+      {/* 7. Selected Planet Astronomical Spec Card */}
       <PlanetInfoCard
         planet={selectedPlanet}
         onClose={() => handleSelectPlanet(null)}
         onSelectNext={handleSelectNext}
       />
 
-      {/* 5. Sleek Collapsible Bottom Dock */}
+      {/* 8. Sleek Collapsible Bottom Dock */}
       <CelestialDock
         selectedPlanetId={selectedPlanet ? selectedPlanet.id : null}
         onSelectPlanet={handleSelectPlanet}
@@ -172,6 +250,8 @@ export default function App() {
         realisticScale={realisticScale}
         onToggleScaleMode={handleToggleScaleMode}
         onSetViewPreset={handleSetViewPreset}
+        isHandTrackingActive={isHandTrackingActive}
+        onToggleHandTracking={handleToggleHandTracking}
       />
     </div>
   );

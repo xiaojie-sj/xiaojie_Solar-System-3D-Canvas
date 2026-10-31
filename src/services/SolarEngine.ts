@@ -876,6 +876,105 @@ export class SolarEngine {
     this.animFrameId = requestAnimationFrame(tick);
   }
 
+  private prevPinchDistance: number | null = null;
+  private lastVictoryTriggerTime: number = 0;
+  private pointingTargetHoldTime: number = 0;
+  private lastPointingPlanetId: string | null = null;
+
+  /**
+   * Process hand gesture commands from MediaPipe
+   */
+  public handleHandGesture(
+    gesture: {
+      type: string;
+      deltaX: number;
+      deltaY: number;
+      pinchDistance: number;
+      indexTip: { x: number; y: number };
+    },
+    onTriggerNextPlanet?: () => void,
+    onTogglePause?: (paused: boolean) => void
+  ): string | null {
+    const now = performance.now();
+
+    // 1. Open Palm: Rotate camera in 3D orbit
+    if (gesture.type === 'open_palm') {
+      if (Math.abs(gesture.deltaX) > 0.002 || Math.abs(gesture.deltaY) > 0.002) {
+        this.controls.rotateLeft(gesture.deltaX * 5.5);
+        this.controls.rotateUp(gesture.deltaY * 4.0);
+      }
+      this.prevPinchDistance = null;
+      return null;
+    }
+
+    // 2. Pinch: Smoothly zoom camera
+    if (gesture.type === 'pinch') {
+      if (this.prevPinchDistance !== null) {
+        const pinchDelta = gesture.pinchDistance - this.prevPinchDistance;
+        if (pinchDelta < -0.012) {
+          this.controls.dollyIn(1.04);
+        } else if (pinchDelta > 0.012) {
+          this.controls.dollyOut(1.04);
+        }
+      }
+      this.prevPinchDistance = gesture.pinchDistance;
+      return null;
+    } else {
+      this.prevPinchDistance = null;
+    }
+
+    // 3. Fist: Temporal Freeze
+    if (gesture.type === 'fist') {
+      if (!this.isPaused) {
+        this.isPaused = true;
+        if (onTogglePause) onTogglePause(true);
+      }
+      return null;
+    }
+
+    // 4. Victory sign: Jump to next celestial body
+    if (gesture.type === 'victory') {
+      if (now - this.lastVictoryTriggerTime > 1500) {
+        this.lastVictoryTriggerTime = now;
+        if (onTriggerNextPlanet) onTriggerNextPlanet();
+      }
+      return null;
+    }
+
+    // 5. Pointing: Holographic laser aiming and auto-locking
+    if (gesture.type === 'pointing') {
+      const ndcX = gesture.indexTip.x * 2 - 1;
+      const ndcY = -gesture.indexTip.y * 2 + 1;
+
+      this.mouse.set(ndcX, ndcY);
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      const intersects = this.raycaster.intersectObjects(this.hitMeshes, false);
+
+      if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        const config: PlanetConfig = hit.userData.config;
+
+        if (this.lastPointingPlanetId === config.id) {
+          this.pointingTargetHoldTime += 16;
+          if (this.pointingTargetHoldTime > 500) {
+            this.focusOnObject(config.id);
+            this.pointingTargetHoldTime = 0;
+          }
+        } else {
+          this.lastPointingPlanetId = config.id;
+          this.pointingTargetHoldTime = 0;
+        }
+
+        return config.name;
+      } else {
+        this.lastPointingPlanetId = null;
+        this.pointingTargetHoldTime = 0;
+      }
+    }
+
+    return null;
+  }
+
   public dispose() {
     cancelAnimationFrame(this.animFrameId);
     window.removeEventListener('resize', this.onResize);

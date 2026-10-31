@@ -30,6 +30,8 @@ interface CelestialDockProps {
   realisticScale: boolean;
   onToggleScaleMode: () => void;
   onSetViewPreset: (preset: 'overview' | 'top' | 'ecliptic' | 'inner' | 'outer') => void;
+  isHandTrackingActive?: boolean;
+  onToggleHandTracking?: () => void;
 }
 
 export const CelestialDock: React.FC<CelestialDockProps> = ({
@@ -48,6 +50,8 @@ export const CelestialDock: React.FC<CelestialDockProps> = ({
   realisticScale,
   onToggleScaleMode,
   onSetViewPreset,
+  isHandTrackingActive,
+  onToggleHandTracking,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'planets' | 'controls' | 'views'>('planets');
@@ -118,8 +122,23 @@ export const CelestialDock: React.FC<CelestialDockProps> = ({
               </button>
             </div>
 
-            {/* Play/Pause & Speed */}
+            {/* Play/Pause, Speed & Hand Gesture Toggle */}
             <div className="flex items-center gap-2">
+              {onToggleHandTracking && (
+                <button
+                  onClick={onToggleHandTracking}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                    isHandTrackingActive
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                      : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                  title={isHandTrackingActive ? '关闭手势控制' : '开启 MediaPipe 手势互动'}
+                >
+                  <span>🖐️</span>
+                  <span className="hidden sm:inline">{isHandTrackingActive ? '手势开启' : '手势互动'}</span>
+                </button>
+              )}
+
               <button
                 onClick={onTogglePause}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${

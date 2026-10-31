@@ -3,9 +3,15 @@ import { Orbit, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 
 interface HeaderBarProps {
   onResetView: () => void;
+  isHandTrackingActive: boolean;
+  onToggleHandTracking: () => void;
 }
 
-export const HeaderBar: React.FC<HeaderBarProps> = ({ onResetView }) => {
+export const HeaderBar: React.FC<HeaderBarProps> = ({
+  onResetView,
+  isHandTrackingActive,
+  onToggleHandTracking,
+}) => {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
   const toggleFullscreen = () => {
@@ -37,7 +43,20 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ onResetView }) => {
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 ml-2 border-l border-slate-800 pl-3">
+        <div className="flex items-center gap-2 ml-2 border-l border-slate-800 pl-3">
+          <button
+            onClick={onToggleHandTracking}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              isHandTrackingActive
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(0,243,255,0.4)] ring-1 ring-cyan-300'
+                : 'bg-slate-800/80 text-sky-300 hover:bg-slate-700/80 border border-sky-500/30'
+            }`}
+            title={isHandTrackingActive ? '关闭手势控制' : '开启 MediaPipe 手势交互'}
+          >
+            <span className="text-sm">🖐️</span>
+            <span className="hidden md:inline">{isHandTrackingActive ? '手势控制中' : '全息手势'}</span>
+          </button>
+
           <button
             onClick={onResetView}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
